@@ -4,8 +4,15 @@
  *
  * @returns {Object[]} An array of night market category objects.
  */
-function getNightMarketParams() {
-  // Mapping of dice results to night market categories
+async function getNightMarketParams() {
+  const FOLDERID =
+    game.settings.get("everbbqscontainergenerator", "Cible") ?? "";
+
+  if (!FOLDERID) {
+    await defineTargetDialog();
+    return;
+  }
+
   const nightMarketTypes = {
     1: { title: "Nourriture et drogues", itemType: ["drug"] },
     2: { title: "Electronique personnelle", itemType: ["gear", "program"] },
@@ -14,24 +21,28 @@ function getNightMarketParams() {
     5: { title: "Vêtements et cyberfasion", itemType: ["clothing"] },
   };
 
-  // Generate two unique dice results for night market categories
-  let [result1, result2] = rollUniqueDice(5);
+  const [result1, result2] = rollUniqueDice(5);
 
-  // Create night market category objects with titles and numberOfItems
-  let categories = [
-    {
-      title: nightMarketTypes[result1].title,
-      numberOfItems: rollDice(10),
-      itemType: nightMarketTypes[result1].itemType.join(", "),
-    },
-    {
-      title: nightMarketTypes[result2].title,
-      numberOfItems: rollDice(10),
-      itemType: nightMarketTypes[result2].itemType.join(", "),
-    },
+  const categories = [
+    createCategoryObject(nightMarketTypes[result1]),
+    createCategoryObject(nightMarketTypes[result2]),
   ];
 
   populateVendor(categories);
+}
+
+/**
+ * Creates a night market category object.
+ *
+ * @param {Object} type - A night market type object.
+ * @returns {Object} A night market category object.
+ */
+function createCategoryObject(type) {
+  return {
+    title: type.title,
+    numberOfItems: rollDice(10),
+    itemType: type.itemType.join(", "),
+  };
 }
 
 /**
@@ -41,33 +52,12 @@ function getNightMarketParams() {
  */
 function populateVendor(categories) {
   for (const category of categories) {
-    let price = 1000;
-    if (category.itemType.includes("weapon")) price = 500;
+    let price = category.itemType.includes("weapon") ? 500 : 1000;
 
     const items = filterItemsByTypeAndPrice(category.itemType, price);
 
-    if (items && items.length > 0) {
-      const usedIndex = new Set();
-      let max_attempts = 100; // Set a maximum number of attempts
-
-      while (usedIndex.size < category.numberOfItems && max_attempts > 10) {
-        let randomIndex = Math.floor(Math.random() * items.length);
-        if (
-          items[randomIndex]?.system?.price?.market &&
-          !usedIndex.has(randomIndex)
-        ) {
-          usedIndex.add(randomIndex);
-        }
-        max_attempts--;
-      }
-
-      if (max_attempts <= 0) {
-        console.error(
-          "Max attempts reached without finding enough valid items."
-        );
-      }
-
-      const vendorItems = Array.from(usedIndex).map((index) => items[index]);
+    if (items && items.length) {
+      const vendorItems = selectVendorItems(items, category.numberOfItems);
       const vendorName = getRandomVendorName();
       generateContainerActor(vendorName, vendorItems);
     } else {
@@ -76,6 +66,41 @@ function populateVendor(categories) {
   }
 }
 
+/**
+ * Selects vendor items based on given criteria.
+ *
+ * @param {Object[]} items - An array of items.
+ * @param {number} numberOfItems - The number of items to select.
+ * @returns {Object[]} An array of selected items.
+ */
+function selectVendorItems(items, numberOfItems) {
+  // const vendorItems = [];
+  const usedIndexes = new Set();
+
+  let maxAttempts = 10;
+  while (usedIndexes.size < numberOfItems && maxAttempts > 0) {
+    const randomIndex = Math.floor(Math.random() * items.length);
+    if (
+      items[randomIndex]?.system?.price?.market &&
+      !usedIndexes.has(randomIndex)
+    ) {
+      usedIndexes.add(randomIndex);
+    }
+    maxAttempts--;
+  }
+
+  if (!maxAttempts) {
+    console.error("Max attempts reached without finding enough valid items.");
+  }
+
+  return Array.from(usedIndexes).map((index) => items[index]);
+}
+
+/**
+ * Generates a random vendor name.
+ *
+ * @returns {string} A random vendor name.
+ */
 function getRandomVendorName() {
   const vendorNames = [
     "Sarah Mitchell",
@@ -107,9 +132,15 @@ function getRandomVendorName() {
   return vendorNames[Math.floor(Math.random() * vendorNames.length)];
 }
 
+/**
+ * Generates a container actor and adds items to it.
+ *
+ * @param {string} containerName - The container's name.
+ * @param {Object[]} items - An array of items to add.
+ */
 async function generateContainerActor(containerName, items) {
-  const FOLDERID = "AaDoX4GmgkdVF46P";
-
+  const FOLDERID =
+    game.settings.get("everbbqscontainergenerator", "Cible") ?? "";
   const actorData = {
     name: containerName,
     type: "container",
@@ -124,36 +155,46 @@ async function generateContainerActor(containerName, items) {
     } else {
       console.error("Actor not found!");
     }
-
     console.log(
       `Created container actor with name: ${actor.name} and ID: ${actor.id}`
     );
-    return actor;
   } catch (error) {
     console.error("Error creating container actor:", error);
   }
 }
 
+/**
+ * Filters items by type and price.
+ *
+ * @param {string[]} types - An array of item types.
+ * @param {number} maxPrice - The maximum price.
+ * @returns {Object[]} An array of filtered items.
+ */
 function filterItemsByTypeAndPrice(types, maxPrice) {
-  const entries = game.items.entries();
-
-  const filteredItems = Array.from(entries).reduce((acc, [index, item]) => {
+  const filteredItems = game.items.filter((item) => {
     const itemType = item.type;
     const itemPrice = item.system.price?.market;
-
-    if (types.includes(itemType) && itemPrice <= maxPrice) {
-      acc.push(item);
-    }
-    return acc;
-  }, []);
-
+    return types.includes(itemType) && itemPrice <= maxPrice;
+  });
   return filteredItems;
 }
 
+/**
+ * Rolls a dice with given sides.
+ *
+ * @param {number} sides - The number of sides on the dice.
+ * @returns {number} The rolled value.
+ */
 function rollDice(sides) {
   return Math.floor(Math.random() * sides) + 1;
 }
 
+/**
+ * Rolls two unique dice values.
+ *
+ * @param {number} max - The maximum value of the dice.
+ * @returns {number[]} An array containing two unique dice values.
+ */
 function rollUniqueDice(max) {
   let result1 = rollDice(max);
   let result2;
@@ -166,28 +207,56 @@ function rollUniqueDice(max) {
 }
 
 /**
- * Mock implementation of filterItemsByTypeAndPrice.
- * Filters items by type and price.
+ * Defines a dialog to set the target folder ID.
  *
- * @param {string} type - The type of items to filter (e.g., "weapon", "armor").
- * @param {number} maxPrice - The maximum price of items to filter.
- * @returns {Object[]} An array of filtered items.
+ * @returns {Promise<void>} A promise resolving when the dialog is closed.
  */
-function filterItemsByTypeAndPrice(types, maxPrice) {
-  // Get entries iterator from game.items
-  console.error(types);
-  const entries = game.items.entries();
+function defineTargetDialog() {
+  return new Promise((resolve) => {
+    let dialogContent = `
+      <form>
+        <div class="form-group">
+          <label for="cibleInput">ID du dossier cible:</label>
+          <input type="text" id="cibleInput" name="cible" value="">
+        </div>
+      </form>
+    `;
 
-  // Use reduce to filter and map items
-  const filteredItems = Array.from(entries).reduce((acc, [index, item]) => {
-    const itemType = item.type;
-    const itemPrice = item.system.price?.market;
+    new Dialog({
+      title: "Modifier ID du dossier cible",
+      content: dialogContent,
+      buttons: {
+        save: {
+          label: "Sauvegarder",
+          callback: (html) => {
+            let cibleValue = html.find("#cibleInput")[0].value;
+            if (game.folders.get(cibleValue) === undefined) {
+              console.error("Folder does not exist");
+            } else {
+              saveCibleSetting(cibleValue);
+              resolve();
+            }
+          },
+        },
+        cancel: {
+          label: "Annuler",
+          callback: () => {
+            console.log("Dialog cancelled");
+            resolve();
+          },
+        },
+      },
+      default: "save",
+    }).render(true);
+  });
+}
 
-    if (types.includes(itemType) && itemPrice <= maxPrice) {
-      acc.push(item);
-    }
-    return acc;
-  }, []);
-
-  return filteredItems;
+/**
+ * Saves the target folder ID to game settings.
+ *
+ * @param {string} cibleValue - The target folder ID.
+ */
+function saveCibleSetting(cibleValue) {
+  game.settings.set("everbbqscontainergenerator", "Cible", cibleValue);
+  console.log(`ID du dossier cible saved: ${cibleValue}`);
 }

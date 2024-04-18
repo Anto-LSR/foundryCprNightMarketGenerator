@@ -2,11 +2,7 @@
   "id": "everbbqscontainergenerator",
   "title": "EverbbqsContainerGenerator",
   "version": "1.0.0",
-  "scripts": [
-    "scripts/init.js",
-    "scripts/utils.js",
-    "scripts/rollTable.js"
-  ],
+  "scripts": ["scripts/init.js", "scripts/utils.js", "scripts/rollTable.js"],
   "compatibility": {
     "minimum": "11",
     "verified": "11"
@@ -15,5 +11,17 @@
     {
       "name": "Everbbq"
     }
-  ]
+  ],
+  "settings": {
+    "Cible": {
+      "name": "ID",
+      "hint": "ID du dossier cible",
+      "scope": "world",
+      "config": true,
+      "default": "",
+      "type": "text"
+    }
+  }
+
+
 }
