@@ -1,0 +1,19 @@
+{
+  "id": "everbbqscontainergenerator",
+  "title": "EverbbqsContainerGenerator",
+  "version": "1.0.0",
+  "scripts": [
+    "scripts/init.js",
+    "scripts/utils.js",
+    "scripts/rollTable.js"
+  ],
+  "compatibility": {
+    "minimum": "11",
+    "verified": "11"
+  },
+  "authors": [
+    {
+      "name": "Everbbq"
+    }
+  ]
+}
